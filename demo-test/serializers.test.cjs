@@ -311,3 +311,29 @@ test('text decoder does not mutate a Uint8Array or its backing bytes', () => {
   assert.equal(new Text().decode(bytes.subarray(1, 6)), 'hello');
   assert.deepEqual(bytes, before);
 });
+
+test('text encoder decodes UTF-8 Uint8Array bodies without stripping BOMs', () => {
+  for (const value of ['', 'plain ASCII', '中文 café 🦘', 'first\nsecond', '\uFEFFfirst\uFEFFlast']) {
+    const body = Uint8Array.from(Buffer.from(value, 'utf8'));
+    assert.equal(new Text().encode({ body }), value);
+  }
+});
+
+test('text encoder respects Uint8Array view bounds and leaves backing bytes unchanged', () => {
+  const content = Buffer.from('\uFEFF中文 🦘\n', 'utf8');
+  const bytes = Uint8Array.from(Buffer.concat([Buffer.from('BAD'), content, Buffer.from('BAD')]));
+  const before = Uint8Array.from(bytes);
+  const body = bytes.subarray(3, 3 + content.length);
+  const request = Object.freeze({ body });
+  assert.equal(new Text().encode(request), content.toString('utf8'));
+  assert.equal(new Text().encode({ body: bytes.subarray(3, 3) }), '');
+  assert.equal(request.body, body);
+  assert.deepEqual(bytes, before);
+});
+
+test('text encoder retains custom and non-Uint8Array toString conversions', () => {
+  const bodies = [{ toString: () => 'custom' }, new Uint16Array([65, 66]), new DataView(new ArrayBuffer(2))];
+  for (const body of bodies) {
+    assert.equal(new Text().encode({ body }), body.toString());
+  }
+});
